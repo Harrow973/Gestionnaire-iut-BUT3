@@ -23,32 +23,39 @@ Ce guide est destiné aux étudiants de 3ème année de BUT Informatique qui von
 - npm ou yarn
 - Git
 - Éditeur de code (VS Code recommandé)
-- Compte Supabase
+- Serveur MySQL
 
 ### Installation
 
 1. Cloner le dépôt :
+
 ```bash
 git clone [URL_DU_REPO]
 cd manager-iut
 ```
 
 2. Installer les dépendances :
+
 ```bash
 npm install
 ```
 
 3. Créer un fichier `.env.local` à la racine du projet avec les variables d'environnement suivantes :
+
 ```
-NEXT_PUBLIC_SUPABASE_URL=votre_url_supabase
-NEXT_PUBLIC_SUPABASE_ANON_KEY=votre_clé_anon_supabase
+MYSQL_HOST=votre_host_mysql
+MYSQL_USER=votre_utilisateur_mysql
+MYSQL_PASSWORD=votre_mot_de_passe_mysql
+MYSQL_DATABASE=votre_base_de_donnees
 ```
 
-4. Configurer la base de données Supabase :
-   - Créer un projet sur [Supabase](https://supabase.com/)
-   - Exécuter le script `supabase-schema-corrected.sql` dans l'éditeur SQL de Supabase
+4. Configurer la base de données MySQL :
+
+   - Créer une base de données MySQL
+   - Exécuter le script `iut-management.sql` pour initialiser le schéma
 
 5. Lancer le serveur de développement :
+
 ```bash
 npm run dev
 ```
@@ -64,32 +71,44 @@ Le projet suit l'architecture App Router de Next.js. Voici les principaux dossie
 - `/src/lib` : Utilitaires et configuration
 - `/src/types` : Types TypeScript
 - `middleware.ts` : Middleware pour l'authentification
-- `supabase-schema-corrected.sql` : Schéma de la base de données
+- `iut-management.sql` : Schéma de la base de données
 
 ### Points d'entrée importants
 
 - `src/app/page.tsx` : Page d'accueil
 - `src/app/layout.tsx` : Layout principal
-- `src/lib/supabase.ts` : Configuration du client Supabase
+- `src/lib/database.ts` : Configuration de la connexion MySQL
 - `middleware.ts` : Middleware d'authentification
+
+### Note sur la migration de la base de données
+
+Le projet a été initialement développé avec Supabase (PostgreSQL) et a été migré vers MySQL. Cette migration a nécessité :
+
+1. La modification de la logique d'interrogation de la base de données pour utiliser mysql2/promise au lieu de Supabase
+2. La suppression de l'authentification administrateur initialement gérée par Supabase
+
+Certains fichiers peuvent encore contenir des références à l'ancienne implémentation Supabase, notamment dans les structures de données retournées par les API. Ces éléments sont maintenus pour assurer la compatibilité avec le code existant.
 
 ## Conventions de code
 
 ### Nommage
 
-- **Fichiers** : 
+- **Fichiers** :
+
   - Composants React : PascalCase (ex: `Button.tsx`)
   - Utilitaires : camelCase (ex: `utils.ts`)
   - Pages : page.tsx (convention Next.js)
 
-- **Variables et fonctions** : 
+- **Variables et fonctions** :
+
   - camelCase (ex: `getUserData`)
   - Noms descriptifs et en français
 
-- **Composants** : 
+- **Composants** :
+
   - PascalCase (ex: `DataTable`)
 
-- **Types et interfaces** : 
+- **Types et interfaces** :
   - PascalCase avec préfixe T pour les types (ex: `TUser`)
   - PascalCase avec préfixe I pour les interfaces (ex: `IUserProps`)
 
@@ -104,25 +123,20 @@ Le projet suit l'architecture App Router de Next.js. Voici les principaux dossie
 Exemple de composant :
 
 ```tsx
-import { FC } from 'react';
+import { FC } from "react";
 
 interface IButtonProps {
   label: string;
   onClick: () => void;
-  variant?: 'primary' | 'secondary';
+  variant?: "primary" | "secondary";
 }
 
-const Button: FC<IButtonProps> = ({ label, onClick, variant = 'primary' }) => {
-  const baseClasses = 'px-4 py-2 rounded';
-  const variantClasses = variant === 'primary' 
-    ? 'bg-blue-500 text-white' 
-    : 'bg-gray-200 text-gray-800';
+const Button: FC<IButtonProps> = ({ label, onClick, variant = "primary" }) => {
+  const baseClasses = "px-4 py-2 rounded";
+  const variantClasses = variant === "primary" ? "bg-blue-500 text-white" : "bg-gray-200 text-gray-800";
 
   return (
-    <button 
-      className={`${baseClasses} ${variantClasses}`}
-      onClick={onClick}
-    >
+    <button className={`${baseClasses} ${variantClasses}`} onClick={onClick}>
       {label}
     </button>
   );
@@ -143,6 +157,7 @@ export default Button;
 ### Processus de développement
 
 1. Créer une branche à partir de `develop` :
+
 ```bash
 git checkout develop
 git pull
@@ -152,12 +167,14 @@ git checkout -b feature/ma-fonctionnalité
 2. Développer la fonctionnalité
 
 3. Commiter régulièrement :
+
 ```bash
 git add .
 git commit -m "Description claire de la modification"
 ```
 
 4. Pousser la branche :
+
 ```bash
 git push -u origin feature/ma-fonctionnalité
 ```
@@ -170,7 +187,7 @@ git push -u origin feature/ma-fonctionnalité
 
 ### Structure
 
-La base de données est hébergée sur Supabase et suit un modèle relationnel. Les principales tables sont :
+La base de données utilise MySQL et suit un modèle relationnel. Les principales tables sont :
 
 - `departement` : Départements de l'IUT
 - `parcours` : Parcours pédagogiques
@@ -181,75 +198,78 @@ La base de données est hébergée sur Supabase et suit un modèle relationnel. 
 
 ### Accès aux données
 
-L'accès aux données se fait via le client Supabase. Voici un exemple d'utilisation :
+L'accès aux données se fait via le client MySQL. Voici un exemple d'utilisation :
 
 ```typescript
-import { supabase } from '@/lib/supabase';
+import { db } from "@/lib/database";
 
 // Récupérer tous les enseignants
 async function getEnseignants() {
-  const { data, error } = await supabase
-    .from('enseignant')
-    .select('*');
-  
-  if (error) {
-    console.error('Erreur lors de la récupération des enseignants:', error);
+  try {
+    const [rows] = await db.execute("SELECT * FROM enseignant");
+    return rows;
+  } catch (error) {
+    console.error("Erreur lors de la récupération des enseignants:", error);
     return [];
   }
-  
-  return data;
 }
 
 // Ajouter un enseignant
 async function addEnseignant(enseignant) {
-  const { data, error } = await supabase
-    .from('enseignant')
-    .insert([enseignant])
-    .select();
-  
-  if (error) {
-    console.error('Erreur lors de l\'ajout de l\'enseignant:', error);
+  try {
+    const [result] = await db.execute("INSERT INTO enseignant (nom, prenom, email) VALUES (?, ?, ?)", [
+      enseignant.nom,
+      enseignant.prenom,
+      enseignant.email,
+    ]);
+    return result.insertId;
+  } catch (error) {
+    console.error("Erreur lors de l'ajout de l'enseignant:", error);
     return null;
   }
-  
-  return data[0];
 }
 ```
 
 ## Authentification
 
-L'authentification est gérée par Supabase Auth. Le middleware (`middleware.ts`) protège les routes `/admin/*`.
+L'authentification est gérée par NextAuth.js. Le middleware (`middleware.ts`) protège les routes `/admin/*`.
 
 ### Connexion
 
 ```typescript
-import { supabase } from '@/lib/supabase';
+import { signIn } from "next-auth/react";
 
-async function signIn(email, password) {
-  const { data, error } = await supabase.auth.signInWithPassword({
-    email,
-    password,
-  });
-  
-  if (error) {
-    console.error('Erreur de connexion:', error);
+async function handleSignIn(email, password) {
+  try {
+    const result = await signIn("credentials", {
+      email,
+      password,
+      redirect: false,
+    });
+
+    if (result?.error) {
+      console.error("Erreur de connexion:", result.error);
+      return null;
+    }
+
+    return result;
+  } catch (error) {
+    console.error("Erreur de connexion:", error);
     return null;
   }
-  
-  return data.user;
 }
 ```
 
 ### Déconnexion
 
 ```typescript
-import { supabase } from '@/lib/supabase';
+import { signOut } from "next-auth/react";
 
-async function signOut() {
-  const { error } = await supabase.auth.signOut();
-  
-  if (error) {
-    console.error('Erreur de déconnexion:', error);
+async function handleSignOut() {
+  try {
+    await signOut({ redirect: false });
+  } catch (error) {
+    console.error("Erreur de déconnexion:", error);
   }
 }
 ```
@@ -266,7 +286,7 @@ Exemple pour une page de statistiques :
 
 ```tsx
 // src/app/statistiques/page.tsx
-import { FC } from 'react';
+import { FC } from "react";
 
 const StatistiquesPage: FC = () => {
   return (
@@ -289,7 +309,7 @@ Exemple :
 
 ```tsx
 // src/components/ui/StatCard.tsx
-import { FC } from 'react';
+import { FC } from "react";
 
 interface IStatCardProps {
   title: string;
@@ -323,34 +343,22 @@ Exemple :
 
 ```typescript
 // src/app/api/statistiques/route.ts
-import { NextResponse } from 'next/server';
-import { supabase } from '@/lib/supabase';
+import { NextResponse } from "next/server";
+import { db } from "@/lib/database";
 
 export async function GET() {
   try {
-    // Récupérer les statistiques depuis Supabase
-    const { data: enseignants, error: enseignantsError } = await supabase
-      .from('enseignant')
-      .select('count');
-    
-    const { data: cours, error: coursError } = await supabase
-      .from('cours')
-      .select('count');
-    
-    if (enseignantsError || coursError) {
-      throw new Error('Erreur lors de la récupération des statistiques');
-    }
-    
+    // Récupérer les statistiques depuis MySQL
+    const [enseignants] = await db.execute("SELECT COUNT(*) as count FROM enseignant");
+    const [cours] = await db.execute("SELECT COUNT(*) as count FROM cours");
+
     return NextResponse.json({
       enseignants: enseignants[0].count,
-      cours: cours[0].count
+      cours: cours[0].count,
     });
   } catch (error) {
-    console.error('Erreur API:', error);
-    return NextResponse.json(
-      { error: 'Erreur serveur' },
-      { status: 500 }
-    );
+    console.error("Erreur API:", error);
+    return NextResponse.json({ error: "Erreur serveur" }, { status: 500 });
   }
 }
 ```
@@ -365,19 +373,19 @@ Exemple de test pour un composant :
 
 ```tsx
 // src/components/ui/Button.test.tsx
-import { render, screen, fireEvent } from '@testing-library/react';
-import Button from './Button';
+import { render, screen, fireEvent } from "@testing-library/react";
+import Button from "./Button";
 
-describe('Button', () => {
-  it('renders correctly', () => {
+describe("Button", () => {
+  it("renders correctly", () => {
     render(<Button label="Cliquez-moi" onClick={() => {}} />);
-    expect(screen.getByText('Cliquez-moi')).toBeInTheDocument();
+    expect(screen.getByText("Cliquez-moi")).toBeInTheDocument();
   });
-  
-  it('calls onClick when clicked', () => {
+
+  it("calls onClick when clicked", () => {
     const handleClick = jest.fn();
     render(<Button label="Cliquez-moi" onClick={handleClick} />);
-    fireEvent.click(screen.getByText('Cliquez-moi'));
+    fireEvent.click(screen.getByText("Cliquez-moi"));
     expect(handleClick).toHaveBeenCalledTimes(1);
   });
 });
@@ -393,17 +401,19 @@ Utiliser Cypress pour les tests d'intégration.
 
 1. Créer un compte sur [Vercel](https://vercel.com/)
 2. Connecter votre dépôt GitHub
-3. Configurer les variables d'environnement
+3. Configurer les variables d'environnement MySQL
 4. Déployer l'application
 
 ### Déploiement sur un serveur personnalisé
 
 1. Construire l'application :
+
 ```bash
 npm run build
 ```
 
 2. Démarrer le serveur :
+
 ```bash
 npm start
 ```
@@ -414,15 +424,16 @@ npm start
 
 - [Next.js](https://nextjs.org/docs)
 - [React](https://reactjs.org/docs)
-- [Supabase](https://supabase.com/docs)
+- [MySQL](https://dev.mysql.com/doc/)
 - [TailwindCSS](https://tailwindcss.com/docs)
 - [TypeScript](https://www.typescriptlang.org/docs)
+- [NextAuth.js](https://next-auth.js.org/getting-started/introduction)
 
 ### Tutoriels recommandés
 
 - [Next.js App Router](https://nextjs.org/docs/app)
-- [Supabase avec Next.js](https://supabase.com/docs/guides/getting-started/quickstarts/nextjs)
-- [Authentification avec Supabase](https://supabase.com/docs/guides/auth)
+- [MySQL avec Node.js](https://www.npmjs.com/package/mysql2)
+- [Authentification avec NextAuth.js](https://next-auth.js.org/getting-started/introduction)
 
 ### Outils de développement
 
@@ -431,10 +442,11 @@ npm start
   - Prettier
   - Tailwind CSS IntelliSense
   - TypeScript Vue Plugin
+  - MySQL (pour la gestion de la base de données)
   - GitHub Copilot (optionnel)
 
 ### Communauté
 
 - [Forum Next.js](https://github.com/vercel/next.js/discussions)
-- [Discord Supabase](https://discord.supabase.com/)
-- [Stack Overflow](https://stackoverflow.com/questions/tagged/next.js) 
+- [Stack Overflow](https://stackoverflow.com/questions/tagged/next.js)
+- [MySQL Forums](https://forums.mysql.com/)

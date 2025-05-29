@@ -2,11 +2,12 @@
 
 ## Vue d'ensemble
 
-Manager IUT est une application web moderne construite avec Next.js 15.3.0 et React 19. L'application suit l'architecture App Router de Next.js, qui utilise un système de routage basé sur les fichiers et les dossiers. La base de données est hébergée sur Supabase, qui fournit également des services d'authentification.
+Manager IUT est une application web moderne construite avec Next.js 15.3.0 et React 19. L'application suit l'architecture App Router de Next.js, qui utilise un système de routage basé sur les fichiers et les dossiers. La base de données est hébergée sur MySQL, qui fournit une solution robuste et performante pour la gestion des données.
 
 ## Stack technologique
 
 ### Frontend
+
 - **Framework** : Next.js 15.3.0
 - **Bibliothèque UI** : React 19
 - **Styling** : TailwindCSS 4
@@ -16,12 +17,14 @@ Manager IUT est une application web moderne construite avec Next.js 15.3.0 et Re
 - **Graphiques** : Recharts
 
 ### Backend
+
 - **API Routes** : Next.js API Routes
-- **Base de données** : PostgreSQL (via Supabase)
-- **ORM** : Supabase Client
-- **Authentification** : Supabase Auth
+- **Base de données** : MySQL
+- **ORM** : mysql2/promise
+- **Authentification** : NextAuth.js
 
 ### Outils de développement
+
 - **Langage** : TypeScript
 - **Linting** : ESLint
 - **Build** : Next.js build system
@@ -56,7 +59,7 @@ manager-iut/
 │   ├── lib/                # Utility functions
 │   │   ├── api-helpers.ts  # API helpers
 │   │   ├── auth.ts         # Auth utilities
-│   │   ├── supabase.ts     # Supabase client
+│   │   ├── database.ts     # mysql database connection
 │   │   └── utils.ts        # General utilities
 │   └── types/              # TypeScript type definitions
 ├── .gitignore              # Git ignore file
@@ -76,7 +79,7 @@ manager-iut/
 
 ### Modèle de données
 
-Le modèle de données est défini dans le fichier `supabase-schema-corrected.sql`. Voici les principales entités et leurs relations :
+Le modèle de données est défini dans le fichier `iut-management.sql`. Voici les principales entités et leurs relations :
 
 ```
 departement (1) --- (*) parcours
@@ -117,22 +120,20 @@ Next.js App Router est utilisé pour le routage. Les routes sont définies par l
 
 ### Authentification
 
-L'authentification est gérée par Supabase Auth. Le middleware (`middleware.ts`) intercepte les requêtes vers les routes protégées (`/admin/*`) et vérifie si l'utilisateur est authentifié.
+L'authentification est gérée par NextAuth.js. Le middleware (`middleware.ts`) intercepte les requêtes vers les routes protégées (`/admin/*`) et vérifie si l'utilisateur est authentifié.
 
 ```typescript
 // middleware.ts
 export async function middleware(request: NextRequest) {
   const res = NextResponse.next();
-  const supabase = createMiddlewareClient({ req: request, res });
-  
-  const { data: { session } } = await supabase.auth.getSession();
-  const isAdminRoute = request.nextUrl.pathname.startsWith('/admin');
-  
+  const session = await getSession({ req: request });
+  const isAdminRoute = request.nextUrl.pathname.startsWith("/admin");
+
   if (isAdminRoute && !session) {
-    const redirectUrl = new URL('/', request.url);
+    const redirectUrl = new URL("/", request.url);
     return NextResponse.redirect(redirectUrl);
   }
-  
+
   return res;
 }
 ```
@@ -140,26 +141,30 @@ export async function middleware(request: NextRequest) {
 ### Gestion d'état
 
 L'état de l'application est géré principalement par :
+
 1. Les props React pour passer des données entre composants
 2. Les hooks React (`useState`, `useEffect`, etc.) pour l'état local
 3. Le contexte React pour l'état global partagé
 
 ### Accès aux données
 
-L'accès aux données est effectué via le client Supabase, configuré dans `src/lib/supabase.ts` :
+L'accès aux données est effectué via le client MySQL, configuré dans `src/lib/database.ts` :
 
 ```typescript
-// src/lib/supabase.ts
-import { createClient } from '@supabase/supabase-js';
+// src/lib/database.ts
+import mysql from "mysql2/promise";
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+const pool = mysql.createPool({
+  host: process.env.MYSQL_HOST,
+  user: process.env.MYSQL_USER,
+  password: process.env.MYSQL_PASSWORD,
+  database: process.env.MYSQL_DATABASE,
+  waitForConnections: true,
+  connectionLimit: 10,
+  queueLimit: 0,
+});
 
-if (!supabaseUrl || !supabaseAnonKey) {
-  throw new Error('Erreur: Les variables d\'environnement Supabase ne sont pas définies.');
-}
-
-export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+export const db = pool;
 ```
 
 ### API
@@ -207,13 +212,15 @@ Les styles sont gérés principalement par TailwindCSS, avec des classes utilita
 - Optimisation des images avec Next.js Image
 - Chargement différé des composants avec `dynamic` de Next.js
 - Mise en cache des requêtes API
+- Utilisation de connexions poolées pour MySQL
 
 ### Sécurité
 
-- Authentification via Supabase Auth
+- Authentification via NextAuth.js
 - Protection des routes administratives avec middleware
 - Validation des entrées utilisateur
 - Utilisation de variables d'environnement pour les informations sensibles
+- Prévention des injections SQL avec des requêtes paramétrées
 
 ## Évolutivité
 
@@ -223,6 +230,7 @@ L'architecture est conçue pour être évolutive :
 2. **Composants modulaires** : Les composants peuvent être réutilisés et composés
 3. **TypeScript** : Le typage statique facilite la maintenance et l'évolution du code
 4. **Architecture basée sur les fichiers** : Facilite l'ajout de nouvelles fonctionnalités
+5. **Pool de connexions MySQL** : Gestion efficace des connexions à la base de données
 
 ## Déploiement
 
@@ -230,4 +238,4 @@ L'application est conçue pour être déployée sur Vercel, qui s'intègre parfa
 
 ## Conclusion
 
-L'architecture de Manager IUT est conçue pour être moderne, maintenable et évolutive. L'utilisation de Next.js avec l'App Router, React, TypeScript et Supabase offre une base solide pour développer une application web performante et sécurisée. 
+L'architecture de Manager IUT est conçue pour être moderne, maintenable et évolutive. L'utilisation de Next.js avec l'App Router, React, TypeScript et MySQL offre une base solide pour développer une application web performante et sécurisée.

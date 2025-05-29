@@ -23,9 +23,19 @@ Manager IUT est une application web développée avec Next.js pour gérer les re
 
 - **Frontend** : Next.js 15.3.0, React 19, TailwindCSS 4
 - **Backend** : API Routes de Next.js
-- **Base de données** : Supabase (PostgreSQL)
-- **Authentification** : Supabase Auth
+- **Base de données** : MySQL
+- **Authentification** : NextAuth.js
 - **UI** : ShadCN UI, Tailwind CSS
+
+### Note sur la migration de la base de données
+
+Initialement, le projet a été développé avec Supabase (PostgreSQL) comme système de base de données. Une migration vers MySQL a été effectuée pour répondre à de nouveaux besoins. Cette migration a nécessité :
+
+1. La conversion du schéma de base de données de PostgreSQL vers MySQL
+2. La modification des requêtes SQL pour être compatible avec MySQL
+3. L'adaptation des API Routes pour utiliser le client MySQL au lieu de Supabase
+
+Il est possible de trouver dans certains fichiers, notamment dans les routes API, des structures de données ou des formats qui correspondent à l'ancienne implémentation Supabase. Ces éléments sont maintenus pour assurer la compatibilité avec le code existant et faciliter la maintenance.
 
 ## Architecture du projet
 
@@ -48,17 +58,19 @@ manager-iut/
 
 - Node.js (version recommandée : 18.x ou supérieure)
 - npm ou yarn
-- Compte Supabase
+- Serveur MySQL
 
 ### Installation
 
 1. Cloner le dépôt :
+
 ```bash
 git clone [URL_DU_REPO]
 cd manager-iut
 ```
 
 2. Installer les dépendances :
+
 ```bash
 npm install
 # ou
@@ -66,16 +78,20 @@ yarn install
 ```
 
 3. Configurer les variables d'environnement :
-Créer un fichier `.env.local` à la racine du projet avec les variables suivantes :
+   Créer un fichier `.env.local` à la racine du projet avec les variables suivantes :
+
 ```
-NEXT_PUBLIC_SUPABASE_URL=votre_url_supabase
-NEXT_PUBLIC_SUPABASE_ANON_KEY=votre_clé_anon_supabase
+MYSQL_HOST=votre_host_mysql
+MYSQL_USER=votre_utilisateur_mysql
+MYSQL_PASSWORD=votre_mot_de_passe_mysql
+MYSQL_DATABASE=votre_base_de_donnees
 ```
 
 4. Initialiser la base de données :
-Exécuter le script SQL `supabase-schema-corrected.sql` dans votre projet Supabase.
+   Exécuter le script SQL `iut-management.sql` dans votre serveur MySQL.
 
 5. Lancer le serveur de développement :
+
 ```bash
 npm run dev
 # ou
@@ -108,14 +124,14 @@ Contient les composants React réutilisables :
 
 Contient les utilitaires et la configuration :
 
-- `supabase.ts` : Configuration du client Supabase
+- `database.ts` : Configuration de la connexion MySQL
 - `utils.ts` : Fonctions utilitaires
 - `api-helpers.ts` : Fonctions d'aide pour les appels API
 - `auth.ts` : Fonctions liées à l'authentification
 
 ## Base de données
 
-L'application utilise Supabase comme base de données PostgreSQL. Le schéma de la base de données est défini dans le fichier `supabase-schema-corrected.sql`.
+L'application utilise MySQL comme système de gestion de base de données. Le schéma de la base de données est défini dans le fichier `iut-management.sql`.
 
 ### Principales tables
 
@@ -140,14 +156,14 @@ L'application utilise Supabase comme base de données PostgreSQL. Le schéma de 
 
 ## Authentification
 
-L'authentification est gérée par Supabase Auth. Le middleware (`middleware.ts`) protège les routes `/admin/*` en vérifiant si l'utilisateur est connecté.
+L'authentification est gérée par NextAuth.js. Le middleware (`middleware.ts`) protège les routes `/admin/*` en vérifiant si l'utilisateur est connecté.
 
 ### Configuration de l'authentification
 
 Pour configurer l'authentification :
 
-1. Dans l'interface Supabase, aller dans "Authentication" > "Users"
-2. Créer un utilisateur administrateur
+1. Configurer NextAuth.js dans votre application
+2. Créer un utilisateur administrateur dans la base de données
 3. Utiliser les identifiants pour se connecter à l'application
 
 ## Composants principaux
@@ -164,13 +180,16 @@ Pour configurer l'authentification :
 ## Routes et pages
 
 ### Page d'accueil
+
 - `/` : Page d'accueil avec tableau de bord
 
 ### Pages d'administration
+
 - `/admin` : Tableau de bord d'administration
 - `/admin/[entity]` : Pages de gestion des entités (enseignants, cours, etc.)
 
 ### Pages de gestion
+
 - `/enseignants` : Liste des enseignants
 - `/cours` : Liste des cours
 - `/planning` : Planning des interventions
@@ -181,7 +200,7 @@ Pour configurer l'authentification :
 
 ## API
 
-L'API est construite avec les API Routes de Next.js, situées dans le dossier `/src/app/api`.
+L'API est construite avec les API Routes de Next.js, situées dans le dossier `/src/app/api`. Les routes API ont été adaptées pour utiliser MySQL au lieu de Supabase, tout en maintenant une structure de réponse similaire pour assurer la compatibilité avec le frontend existant.
 
 ### Points d'entrée API
 
@@ -191,6 +210,18 @@ L'API est construite avec les API Routes de Next.js, situées dans le dossier `/
 - `/api/maquettes` : CRUD pour les maquettes pédagogiques
 - `/api/departements` : CRUD pour les départements
 - `/api/interventions` : CRUD pour les interventions
+
+### Format des réponses API
+
+Les réponses API suivent un format standardisé pour maintenir la compatibilité avec le code existant :
+
+```typescript
+{
+  data?: any;           // Données de la réponse
+  error?: string;       // Message d'erreur si applicable
+  status?: number;      // Code de statut HTTP
+}
+```
 
 ## Déploiement
 
@@ -232,4 +263,4 @@ Pour contribuer au projet :
 2. Créer une branche dédiée
 3. Développer et tester localement
 4. Soumettre une pull request pour révision
-5. Après approbation, fusionner avec la branche principale 
+5. Après approbation, fusionner avec la branche principale

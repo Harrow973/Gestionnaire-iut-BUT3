@@ -1,91 +1,89 @@
-import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
-import { cookies } from 'next/headers';
-import { NextResponse } from 'next/server';
+import { db } from "@/lib/database";
+import { NextResponse } from "next/server";
 
 export async function GET() {
   try {
-    const supabase = createRouteHandlerClient({ cookies });
-    
     // Vérifier les tables principales avec les noms exacts en snake_case
     const tables = [
-      'departement',
-      'parcours',
-      'statut_enseignant',
-      'enseignant',
-      'enseignant_statut',
-      'maquette_pedagogique',
-      'cours',
-      'type_cours',
-      'allocation_horaire',
-      'groupe',
-      'intervention',
-      'salle',
-      'planning',
-      'historique_intervention'
+      "departement",
+      "parcours",
+      "statut_enseignant",
+      "enseignant",
+      "enseignant_statut",
+      "maquette_pedagogique",
+      "cours",
+      "type_cours",
+      "allocation_horaire",
+      "groupe",
+      "intervention",
+      "salle",
+      "planning",
+      "historique_intervention",
     ];
-    
+
     // Tester chaque table
     const results = await Promise.all(
       tables.map(async (tableName) => {
         try {
-          // Requête simplifiée qui vérifie juste si la table existe
-          const { error } = await supabase
-            .from(tableName)
-            .select('id')
-            .limit(1);
-          
-          // Récupérer le nombre d'enregistrements si la table existe
+          // Vérifier si la table existe et compter les enregistrements
+          const [tableCheck] = await db.query(
+            `SELECT COUNT(*) as count FROM information_schema.tables 
+             WHERE table_schema = DATABASE() AND table_name = ?`,
+            [tableName]
+          );
+
+          const exists = (tableCheck as any[])[0].count > 0;
           let count = 0;
-          if (!error) {
-            const { data: countData } = await supabase
-              .from(tableName)
-              .select('*', { count: 'exact', head: true });
-            
-            count = countData?.length || 0;
+
+          if (exists) {
+            const [countResult] = await db.query(`SELECT COUNT(*) as count FROM ${tableName}`);
+            count = (countResult as any[])[0].count;
           }
-            
+
           return {
             tableName,
-            exists: !error,
+            exists,
             count,
-            error: error ? error.message : null
+            error: null,
           };
         } catch (e) {
           return {
             tableName,
             exists: false,
             count: 0,
-            error: e instanceof Error ? e.message : `Table ${tableName} non accessible`
+            error: e instanceof Error ? e.message : `Table ${tableName} non accessible`,
           };
         }
       })
     );
-    
+
     // Vérifier si au moins une table existe
-    const hasExistingTables = results.some(result => result.exists);
-    
+    const hasExistingTables = results.some((result) => result.exists);
+
     if (!hasExistingTables) {
-      return NextResponse.json({ 
+      return NextResponse.json({
         connected: true,
-        message: 'Connexion à Supabase réussie, mais aucune table trouvée',
-        suggestion: 'Assurez-vous de créer les tables en exécutant le script SQL fourni.',
-        tablesStatus: results
+        message: "Connexion à MySQL réussie, mais aucune table trouvée",
+        suggestion: "Assurez-vous de créer les tables en exécutant le script SQL fourni.",
+        tablesStatus: results,
       });
     }
-    
+
     // Connexion réussie et certaines tables trouvées
-    return NextResponse.json({ 
+    return NextResponse.json({
       connected: true,
-      message: 'Connexion à Supabase réussie!',
+      message: "Connexion à MySQL réussie!",
       tablesStatus: results,
-      availableTables: results.filter(r => r.exists).map(r => r.tableName)
+      availableTables: results.filter((r) => r.exists).map((r) => r.tableName),
     });
-    
   } catch (error) {
-    console.error('Error testing Supabase connection:', error);
-    return NextResponse.json({ 
-      connected: false, 
-      error: error instanceof Error ? error.message : 'Une erreur inconnue est survenue'
-    }, { status: 500 });
+    console.error("Error testing MySQL connection:", error);
+    return NextResponse.json(
+      {
+        connected: false,
+        error: error instanceof Error ? error.message : "Une erreur inconnue est survenue",
+      },
+      { status: 500 }
+    );
   }
-} 
+}

@@ -1,41 +1,40 @@
-import { redirect } from 'next/navigation';
-import Link from 'next/link';
-import { FaArrowLeft, FaSave } from 'react-icons/fa';
-import { supabase } from '@/lib/supabase';
+import { redirect } from "next/navigation";
+import Link from "next/link";
+import { FaArrowLeft, FaSave } from "react-icons/fa";
+import { db } from "@/lib/database";
 
 export const metadata = {
-  title: 'Nouvel Département - Admin Manager IUT',
-  description: 'Créer un nouveau département',
+  title: "Nouvel Département - Admin Manager IUT",
+  description: "Créer un nouveau département",
 };
 
 async function createDepartement(formData: FormData) {
-  'use server';
-  
+  "use server";
+
   // Récupérer les données du formulaire
-  const nom = formData.get('nom') as string;
-  const code = formData.get('code') as string;
-  const description = formData.get('description') as string;
+  const nom = formData.get("nom") as string;
+  const code = formData.get("code") as string;
+  const description = formData.get("description") as string;
 
   // Vérifier que les champs obligatoires sont remplis
   if (!nom || !code) {
-    throw new Error('Le nom et le code sont obligatoires');
+    throw new Error("Le nom et le code sont obligatoires");
   }
 
   try {
     // Insérer le nouveau département dans la base de données
-    const { data, error } = await supabase
-      .from('departement')
-      .insert([{ nom, code, description }])
-      .select();
-
-    if (error) throw error;
+    const [result] = await db.query("INSERT INTO departement (nom, code, description) VALUES (?, ?, ?)", [
+      nom,
+      code,
+      description,
+    ]);
 
     // Rediriger vers la liste des départements
-    redirect('/admin/departements');
   } catch (error) {
-    console.error('Erreur lors de la création du département:', error);
-    throw new Error('Erreur lors de la création du département');
+    console.error("Erreur lors de la création du département:", error);
+    throw new Error("Erreur lors de la création du département");
   }
+  redirect("/admin/departements");
 }
 
 export default function NewDepartementPage() {
@@ -43,8 +42,8 @@ export default function NewDepartementPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold text-gray-800">Créer un nouveau département</h1>
-        <Link 
-          href="/admin/departements" 
+        <Link
+          href="/admin/departements"
           className="flex items-center px-4 py-2 bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200 transition-colors"
         >
           <FaArrowLeft className="mr-2" />
@@ -110,4 +109,4 @@ export default function NewDepartementPage() {
       </div>
     </div>
   );
-} 
+}

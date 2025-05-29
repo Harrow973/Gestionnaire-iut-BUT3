@@ -1,28 +1,25 @@
-'use client';
+"use client";
 
-import { useState, useEffect } from 'react';
-import Link from 'next/link';
-import { 
-  FaUsers, 
-  FaSchool, 
-  FaUserShield, 
-  FaLock, 
-  FaDatabase, 
-  FaCog, 
+import { useState, useEffect } from "react";
+import Link from "next/link";
+import {
+  FaUsers,
+  FaSchool,
+  FaUserShield,
+  FaLock,
+  FaDatabase,
+  FaCog,
   FaUsersCog,
   FaChalkboardTeacher,
   FaCalendarAlt,
-  FaClipboardList
-} from 'react-icons/fa';
+  FaClipboardList,
+} from "react-icons/fa";
 import { FaServer, FaFileAlt } from "react-icons/fa";
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
-import { useRouter } from 'next/navigation';
 
 // Define types for the app
 interface HistoryItem {
   id: string;
   created_at: string;
-  statut: string;
   commentaire: string;
   intervention: {
     id: string;
@@ -41,13 +38,8 @@ interface Statistics {
   users: number;
 }
 
-// Admin authentication using Supabase
 export default function AdminDashboard() {
   const [isLoading, setIsLoading] = useState(true);
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [error, setError] = useState('');
   const [stats, setStats] = useState<Statistics>({
     departments: 0,
     teachers: 0,
@@ -56,125 +48,35 @@ export default function AdminDashboard() {
     users: 0,
   });
   const [recentChanges, setRecentChanges] = useState<HistoryItem[]>([]);
-  
-  const supabase = createClientComponentClient();
-  const router = useRouter();
 
-  // Check if the user is already authenticated
+  // Load initial data
   useEffect(() => {
-    async function checkAuth() {
-      const { data: { session } } = await supabase.auth.getSession();
-      
-      if (session) {
-        setIsAuthenticated(true);
-        loadStats();
-        loadRecentChanges();
-      }
-      
-      setIsLoading(false);
-    }
-    
-    checkAuth();
-  }, [supabase.auth]);
+    loadStats();
+    loadRecentChanges();
+    setIsLoading(false);
+  }, []);
 
-  const handleLogin = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setIsLoading(true);
-    
-    try {
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      });
-      
-      if (error) {
-        setError(error.message);
-        setIsLoading(false);
-        return;
-      }
-      
-      if (data?.session) {
-        setIsAuthenticated(true);
-        setError('');
-        loadStats();
-        loadRecentChanges();
-      }
-    } catch (err) {
-      console.error('Erreur de connexion:', err);
-      setError('Erreur lors de la connexion');
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  // Fonction pour récupérer les statistiques de la base de données
+  // Function to fetch database statistics
   async function loadStats() {
     try {
-      // Récupérer le nombre de lignes dans les tables principales
-      const [
-        { count: depCount }, 
-        { count: ensCount }, 
-        { count: courseCount },
-        { count: interventionCount }
-      ] = await Promise.all([
-        supabase.from('departement').select('*', { count: 'exact', head: true }),
-        supabase.from('enseignant').select('*', { count: 'exact', head: true }),
-        supabase.from('cours').select('*', { count: 'exact', head: true }),
-        supabase.from('intervention').select('*', { count: 'exact', head: true })
-      ]);
-
-      // Get user count or default to 0 if table doesn't exist
-      let userCount = 0;
-      try {
-        const { count } = await supabase.from('users').select('*', { count: 'exact', head: true });
-        if (count !== null) userCount = count;
-      } catch {
-        // Table doesn't exist, leave count at 0
-      }
-
-      setStats({
-        departments: depCount || 0,
-        teachers: ensCount || 0,
-        courses: courseCount || 0,
-        interventions: interventionCount || 0,
-        users: userCount,
-      });
+      const response = await fetch("/api/admin/stats");
+      const data = await response.json();
+      setStats(data);
     } catch (error) {
       console.error("Erreur lors de la récupération des statistiques :", error);
     }
   }
 
-  // Fonction pour récupérer les 5 dernières modifications
+  // Function to fetch recent changes
   async function loadRecentChanges() {
     try {
-      const { data } = await supabase
-        .from('historique_intervention')
-        .select(`
-          id,
-          created_at,
-          statut,
-          commentaire,
-          intervention:intervention_id(
-            id,
-            cours:cours_id(code, nom)
-          )
-        `)
-        .order('created_at', { ascending: false })
-        .limit(5);
-
-      if (data) {
-        setRecentChanges(data as HistoryItem[]);
-      }
+      const response = await fetch("/api/admin/recent-changes");
+      const data = await response.json();
+      setRecentChanges(data);
     } catch (error) {
       console.error("Erreur lors de la récupération des modifications récentes :", error);
     }
   }
-
-  const handleSignOut = async () => {
-    await supabase.auth.signOut();
-    setIsAuthenticated(false);
-    router.refresh();
-  };
 
   const adminModules = [
     {
@@ -183,7 +85,7 @@ export default function AdminDashboard() {
       icon: <FaUsersCog className="text-3xl" />,
       path: "/admin/utilisateurs",
       color: "bg-gradient-to-br from-purple-500 to-purple-600",
-      count: stats.users
+      count: stats.users,
     },
     {
       title: "Gestion des départements",
@@ -191,7 +93,7 @@ export default function AdminDashboard() {
       icon: <FaSchool className="text-3xl" />,
       path: "/admin/departements",
       color: "bg-gradient-to-br from-blue-500 to-blue-600",
-      count: stats.departments
+      count: stats.departments,
     },
     {
       title: "Gestion des enseignants",
@@ -199,7 +101,7 @@ export default function AdminDashboard() {
       icon: <FaChalkboardTeacher className="text-3xl" />,
       path: "/admin/enseignants",
       color: "bg-gradient-to-br from-green-500 to-green-600",
-      count: stats.teachers
+      count: stats.teachers,
     },
     {
       title: "Gestion du planning",
@@ -207,7 +109,7 @@ export default function AdminDashboard() {
       icon: <FaCalendarAlt className="text-3xl" />,
       path: "/admin/planning",
       color: "bg-gradient-to-br from-amber-500 to-amber-600",
-      count: stats.interventions
+      count: stats.interventions,
     },
     {
       title: "Paramètres du système",
@@ -215,7 +117,7 @@ export default function AdminDashboard() {
       icon: <FaCog className="text-3xl" />,
       path: "/admin/parametres",
       color: "bg-gradient-to-br from-indigo-500 to-indigo-600",
-      count: 0
+      count: 0,
     },
     {
       title: "Logs et audit",
@@ -223,7 +125,7 @@ export default function AdminDashboard() {
       icon: <FaClipboardList className="text-3xl" />,
       path: "/admin/logs",
       color: "bg-gradient-to-br from-red-500 to-red-600",
-      count: 0
+      count: 0,
     },
   ];
 
@@ -235,78 +137,6 @@ export default function AdminDashboard() {
     );
   }
 
-  if (!isAuthenticated) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
-        <div className="max-w-md w-full space-y-8">
-          <div>
-            <div className="mx-auto h-16 w-16 flex items-center justify-center rounded-full bg-blue-100">
-              <FaUserShield className="h-10 w-10 text-blue-600" />
-            </div>
-            <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900">
-              Espace administrateur
-            </h2>
-            <p className="mt-2 text-center text-sm text-gray-600">
-              Veuillez vous authentifier pour accéder au panneau d'administration
-            </p>
-          </div>
-          <form className="mt-8 space-y-6" onSubmit={handleLogin}>
-            <div className="rounded-md shadow-sm -space-y-px">
-              <div>
-                <label htmlFor="email" className="sr-only">Email</label>
-                <input
-                  id="email"
-                  name="email"
-                  type="email"
-                  required
-                  className="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-t-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm"
-                  placeholder="Email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                />
-              </div>
-              <div>
-                <label htmlFor="password" className="sr-only">Mot de passe</label>
-                <input
-                  id="password"
-                  name="password"
-                  type="password"
-                  required
-                  className="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-b-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm"
-                  placeholder="Mot de passe"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                />
-              </div>
-            </div>
-
-            {error && (
-              <div className="bg-red-50 text-red-500 p-3 rounded-md text-sm">
-                {error}
-              </div>
-            )}
-
-            <div>
-              <button
-                type="submit"
-                className="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-                disabled={isLoading}
-              >
-                <span className="absolute left-0 inset-y-0 flex items-center pl-3">
-                  <FaLock className="h-5 w-5 text-blue-500 group-hover:text-blue-400" />
-                </span>
-                {isLoading ? 'Connexion...' : 'Se connecter'}
-              </button>
-            </div>
-          </form>
-          <div className="text-sm text-center text-gray-500">
-            <p>Pour tester: email "admin@example.com", mot de passe "password"</p>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className="space-y-6">
       <header className="flex justify-between items-center">
@@ -314,18 +144,14 @@ export default function AdminDashboard() {
           <h1 className="text-3xl font-bold text-gray-900">Tableau de bord d'administration</h1>
           <p className="mt-1 text-gray-500">Gestion du système de maquettes pédagogiques IUT</p>
         </div>
-        <button 
-          onClick={handleSignOut}
-          className="bg-gray-200 hover:bg-gray-300 text-gray-800 px-4 py-2 rounded-md text-sm font-medium transition-colors"
-        >
-          Déconnexion
-        </button>
       </header>
 
       <section className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {adminModules.map((module, index) => (
           <Link key={index} href={module.path}>
-            <div className={`p-6 rounded-lg border shadow-sm hover:shadow-md transition-shadow ${module.color} text-white`}>
+            <div
+              className={`p-6 rounded-lg border shadow-sm hover:shadow-md transition-shadow ${module.color} text-white`}
+            >
               <div className="flex items-center justify-between">
                 <div className="flex flex-col">
                   <span className="text-lg font-medium">{module.title}</span>
@@ -349,16 +175,10 @@ export default function AdminDashboard() {
                   <div className="h-2 w-2 mt-2 rounded-full bg-blue-500 mr-3"></div>
                   <div>
                     <p className="text-gray-700">
-                      {change.statut === 'créée' && 'Nouvelle intervention créée'}
-                      {change.statut === 'modifiée' && 'Intervention modifiée'}
-                      {change.statut === 'annulée' && 'Intervention annulée'}
-                      {change.statut === 'validée' && 'Intervention validée'}
-                      {!['créée', 'modifiée', 'annulée', 'validée'].includes(change.statut) && change.commentaire}
+                      {change.commentaire}
                       {change.intervention?.cours && ` pour ${change.intervention.cours.code}`}
                     </p>
-                    <p className="text-xs text-gray-500 mt-1">
-                      {new Date(change.created_at).toLocaleString('fr-FR')}
-                    </p>
+                    <p className="text-xs text-gray-500 mt-1">{new Date(change.created_at).toLocaleString("fr-FR")}</p>
                   </div>
                 </div>
               ))
@@ -406,4 +226,4 @@ export default function AdminDashboard() {
       </div>
     </div>
   );
-} 
+}
